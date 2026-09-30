@@ -47,9 +47,26 @@ if [ -z "${LLAMA_COMMIT:-}" ]; then
   echo ">>   export LLAMA_COMMIT=$HEAD_SHA"
 fi
 
+# Hosts without a system CUDA toolkit can keep one in a local prefix (CUDA_PREFIX, e.g. a
+# micromamba env with cuda-nvcc, cuda-cudart-dev and libcublas-dev). Its lib dir is baked
+# into the binaries' rpath so they run without LD_LIBRARY_PATH.
+CUDA_PREFIX="${CUDA_PREFIX:-vendor/cuda}"
+CUDA_ARGS=()
+if [ -x "$CUDA_PREFIX/bin/nvcc" ]; then
+  CUDA_PREFIX="$(cd "$CUDA_PREFIX" && pwd)"
+  echo ">> using local CUDA toolkit at $CUDA_PREFIX"
+  export PATH="$CUDA_PREFIX/bin:$PATH"
+  CUDA_ARGS=(
+    -DCMAKE_CUDA_COMPILER="$CUDA_PREFIX/bin/nvcc"
+    -DCUDAToolkit_ROOT="$CUDA_PREFIX"
+    -DCMAKE_BUILD_RPATH="$CUDA_PREFIX/lib"
+  )
+fi
+
 echo ">> configuring (CUDA, sm_$CUDA_ARCH)"
 "$CMAKE" -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" \
   -DCMAKE_BUILD_TYPE=Release \
+  "${CUDA_ARGS[@]}" \
   -DGGML_CUDA=ON \
   -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCH" \
   -DLLAMA_CURL=OFF \
