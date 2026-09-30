@@ -4,10 +4,11 @@ Fine-tunes Qwen3-8B with Unsloth QLoRA on `nvidia/Nemotron-Personas-Brazil`, exp
 GGUF, and evaluates against the base model through llama.cpp. Everything runs on a single
 12GB GPU.
 
-> **This fork targets an RTX 3070 Ti 8GB.** Setup, data, base export, serving, eval and
-> report run on it; QLoRA training of Qwen3-8B and the tuned merge do not fit in 8GB. The
-> results below were measured on the original RTX 3060 12GB. See
-> [ADR 0013](docs/adr/0013-target-hardware-rtx-3070-ti.md).
+> **This fork targets an RTX 3070 Ti 8GB.** The whole pipeline runs on it; training fits
+> with the standard 4-bit checkpoint, batch 1 and in-training evaluation off (~7.1GB
+> peak). The results below were measured on the original RTX 3060 12GB with a different
+> training configuration. See [ADR 0013](docs/adr/0013-target-hardware-rtx-3070-ti.md) and
+> [ADR 0014](docs/adr/0014-training-qwen3-8b-on-8gb.md).
 
 **Task:** demographic attributes in, six-section Brazilian-Portuguese persona out.
 
@@ -178,7 +179,7 @@ Base and tuned are evaluated **sequentially, never concurrently**: two Q4_K_M 8B
 make setup    # uv venv (Python 3.12) + CUDA build of llama.cpp
 make smoke    # 200-row end-to-end check — run this first
 make data     # 10k/500/200 splits
-make train    # ~7.4h QLoRA on the 3060 (measured)
+make train    # ~4.4h QLoRA on the 3070 Ti (projected from 25 s/step)
 make export   # GGUF for tuned and base
 make eval     # sequential base-vs-tuned scoring
 make report   # outputs/eval/report.html
@@ -186,8 +187,7 @@ make report   # outputs/eval/report.html
 
 ## Requirements
 
-Training: RTX 3060 12GB or better with ~9.5GB free VRAM. Serving and evaluation: 8GB is
-enough (~5.5GB peak). 30GB RAM · 60GB free disk · NVIDIA driver 535+ · a C++ compiler.
+An 8GB NVIDIA GPU with ~7.6GB free: training peaks at ~7.1GB, serving at ~5.5GB. 30GB RAM · 60GB free disk · NVIDIA driver 535+ · a C++ compiler.
 
 Host Python is not used — `uv` manages a project-local 3.12 environment, and `cmake`
 is installed into it. If the host has no CUDA toolkit, `make setup` installs one into
@@ -206,8 +206,9 @@ export LLAMA_COMMIT=bdeb855b30dfe7f6e695cba98445a7ba09e6416e
 
 ## If training runs out of memory
 
-In order: batch 1 with grad-accum 16 → `max_seq_length` 1536 → stop the GNOME session
-(`sudo systemctl isolate multi-user.target`) to reclaim ~2.7GB.
+The config already uses batch 1, `max_seq_length` 1536 and no in-training evaluation
+(ADR 0014). What is left is freeing the GPU: close GPU-accelerated apps, or stop the
+desktop session (`sudo systemctl isolate multi-user.target`).
 
 ## Documentation
 

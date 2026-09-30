@@ -47,6 +47,11 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[tool.uv]
+# triton JIT-compiles a C module at the first training step and needs Python.h. A distro
+# Python without its -dev package lacks it; uv's managed builds ship the headers.
+python-preference = "only-managed"
+
 [tool.uv.sources]
 # torchvision MUST come from the same index as torch: transformers imports it, and a
 # torchvision built against a different CUDA major version aborts the import.

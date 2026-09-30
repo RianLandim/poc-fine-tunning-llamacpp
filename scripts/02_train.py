@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Stage 2 -- QLoRA fine-tune Qwen3-8B on a single RTX 3060 (ADR 0002, 0009).
+"""Stage 2 -- QLoRA fine-tune Qwen3-8B on a single 8GB GPU (ADR 0002, 0012, 0014).
 
 Trains on the assistant response only, so the loss never rewards reproducing the prompt.
 Prints a measured ETA after a short warmup: a wrong throughput estimate should surface in
@@ -22,7 +22,7 @@ from pathlib import Path
 # against a multi-hour run. Must be set before torch is imported.
 os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "4")
 os.environ.setdefault("OMP_NUM_THREADS", "8")
-# Training sits at ~8GB of ~9.5GB free, so the allocator has little room to manoeuvre;
+# Training peaks at ~7.1GB of ~7.6GB, so the allocator has little room to manoeuvre;
 # expandable segments avoid fragmentation stalling an otherwise-fitting allocation.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
@@ -78,10 +78,12 @@ def main() -> int:
         return 1
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=cfg.model.base_id,
+        model_name=getattr(cfg.model, "train_id", cfg.model.base_id),
         max_seq_length=cfg.model.max_seq_length,
         load_in_4bit=cfg.model.load_in_4bit,
         dtype=None,  # auto-detect: bf16 on Ampere
+        # Without this Unsloth remaps the name to its larger dynamic 4-bit checkpoint.
+        use_exact_model_name=hasattr(cfg.model, "train_id"),
     )
 
     model = FastLanguageModel.get_peft_model(
@@ -109,8 +111,12 @@ def main() -> int:
 
     # A full validation pass is pure wall clock: it does not improve the model, and the
     # mean loss over a few hundred rows is already stable. Cap it.
+    eval_strategy = getattr(cfg.train, "eval_strategy", "steps")
+    evaluating = eval_strategy != "no"
+    if not evaluating:
+        print(">> in-training evaluation is off (train.eval_strategy)")
     eval_rows = getattr(cfg.train, "eval_subset_rows", None)
-    if eval_rows and len(splits["validation"]) > eval_rows:
+    if evaluating and eval_rows and len(splits["validation"]) > eval_rows:
         splits["validation"] = splits["validation"].select(range(eval_rows))
         print(f">> evaluating on a {eval_rows}-row subset of validation")
 
@@ -129,7 +135,7 @@ def main() -> int:
         model=model,
         processing_class=tokenizer,
         train_dataset=splits["train"],
-        eval_dataset=splits["validation"],
+        eval_dataset=splits["validation"] if evaluating else None,
         args=SFTConfig(
             output_dir=str(outputs / "checkpoints"),
             dataset_text_field="text",
@@ -156,8 +162,8 @@ def main() -> int:
             # 40s/step compute cost.
             dataloader_pin_memory=False,
             logging_steps=cfg.train.logging_steps,
-            eval_strategy="steps",
-            eval_steps=cfg.train.eval_steps,
+            eval_strategy=eval_strategy,
+            eval_steps=cfg.train.eval_steps if evaluating else None,
             save_steps=cfg.train.save_steps,
             save_total_limit=cfg.train.save_total_limit,
             seed=cfg.train.seed,

@@ -2,8 +2,8 @@
 
 Fine-tune **Qwen3-8B** with **Unsloth QLoRA** on NVIDIA's synthetic Brazilian persona
 corpus, export to **GGUF**, serve and evaluate with **llama.cpp** — originally on a single
-RTX 3060 (12GB). **This fork targets an RTX 3070 Ti (8GB)** — see ADR 0013 for what that
-changes.
+RTX 3060 (12GB). **This fork targets an RTX 3070 Ti (8GB)** — see ADR 0013 and 0014 for what
+that changes.
 
 **Task:** demographic attributes in, six-section Brazilian-Portuguese persona narrative out.
 
@@ -36,9 +36,6 @@ make setup → make data → make train → make export → make serve → make 
 `make smoke` runs the whole chain on a 200-row slice in minutes. Run it before any
 multi-hour training run.
 
-**On this card `make train` and the tuned half of `make export` do not run** (see VRAM).
-Everything else does: setup, data, base export, serve, eval, report.
-
 ## Invariants — breaking these silently invalidates results
 
 1. **One prompt renderer.** Every prompt comes from `src/personas/prompt.py`. Never build a
@@ -58,11 +55,17 @@ Everything else does: setup, data, base export, serve, eval, report.
 
 ## VRAM
 
-Qwen3-8B QLoRA does **not** train on this card (ADR 0013). The 4-bit checkpoint is 7.0GB
-against ~7.2GB free, so the load fails before the first step, and the measured training
-peak on the 3060 was 9.13GB. The old OOM ladder (batch 1 → `max_seq_length` 1536 → stop
-GNOME) cannot close that gap — do not spend time on it. The tuned merge in
-`03_export_gguf.py` loads the same model and fails the same way.
+Training peaks at **~7.1GB of 7.65GB** (ADR 0014) and only fits because of three settings
+in the config. Do not undo any of them on this card:
+
+- `model.train_id: unsloth/Qwen3-8B-bnb-4bit` — the standard 4-bit checkpoint (5.66GB).
+  `unsloth/Qwen3-8B` resolves to the dynamic one (6.97GB), which fails at load.
+- batch 1 × grad-accum 16, `max_seq_length` 1536.
+- `train.eval_strategy: "no"` — an in-training eval pass materialises full fp32 logits and
+  OOMs.
+
+The margin is ~0.5GB: train with the desktop light or from a TTY. There is no further
+fallback short of a smaller base model.
 
 Serving fits: Q4_K_M 8B with `-ngl 99 -c 4096` peaks at ~5.5GB.
 
@@ -87,6 +90,9 @@ Serving fits: Q4_K_M 8B with `-ngl 99 -c 4096` peaks at ~5.5GB.
   into `vendor/cuda` with micromamba, and `00_setup_llamacpp.sh` bakes its lib dir into the
   rpath. Without that rpath the binaries build fine and then fail at launch with
   `libcudart.so.12: cannot open shared object file`.
+- **triton needs `Python.h` at the first training step.** A distro Python without its
+  `-dev` package fails there with a gcc error, minutes in. `pyproject.toml` sets
+  `python-preference = "only-managed"` so the venv uses uv's CPython, which ships headers.
 - **Never pipe a long-running script through `tail`** to inspect it — the pipeline's exit
   code is `tail`'s, so failures report as success. Redirect to a file instead.
 

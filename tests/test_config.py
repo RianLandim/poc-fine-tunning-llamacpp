@@ -8,9 +8,9 @@ CONFIG = Path(__file__).parent.parent / "configs" / "qwen3-8b-personas.yaml"
 def test_load_config_exposes_nested_attributes():
     cfg = load_config(CONFIG)
     assert cfg.model.base_id == "unsloth/Qwen3-8B"
-    assert cfg.model.max_seq_length == 2048
+    assert cfg.model.max_seq_length == 1536
     assert cfg.lora.r == 32
-    assert cfg.train.per_device_train_batch_size == 2
+    assert cfg.train.per_device_train_batch_size == 1
     assert cfg.decode.top_k == 20
 
 

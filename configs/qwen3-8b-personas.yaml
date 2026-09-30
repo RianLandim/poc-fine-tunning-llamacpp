@@ -3,12 +3,17 @@
 
 model:
   base_id: unsloth/Qwen3-8B
-  max_seq_length: 2048
+  # Weights loaded for training only (ADR 0014). base_id resolves to Unsloth's dynamic
+  # 4-bit checkpoint (6.97GB), which does not even load in 8GB; the standard bnb 4-bit
+  # one is 5.66GB. Tokenizer and the fp16 base export still come from base_id.
+  train_id: unsloth/Qwen3-8B-bnb-4bit
+  # Longest training text measured is 1458 tokens; 2048 only reserved VRAM.
+  max_seq_length: 1536
   load_in_4bit: true
 
 data:
   hf_dataset: nvidia/Nemotron-Personas-Brazil
-  n_train: 10000  # ADR 0012: measured 39.2 s/step -> ~6.8h
+  n_train: 10000  # ADR 0012; ~25 s/step measured on the 3070 Ti -> ~4.4h
   n_val: 500
   n_test: 200
   seed: 3407
@@ -24,11 +29,10 @@ lora:
   random_state: 3407
 
 train:
-  per_device_train_batch_size: 2
-  # Eval materialises full logits (vocab 151936); at the default batch of 8 that is
-  # several GB on top of a training peak that already sits at ~8GB of 9.5GB free.
+  # Effective batch 16, one sequence at a time: measured 7.06GB peak on the 8GB card.
+  per_device_train_batch_size: 1
   per_device_eval_batch_size: 1
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 16
   # Sort similar-length sequences into the same batch. Targets range 775-1458 tokens,
   # so without this a short sequence is padded up to the longest in its batch.
   group_by_length: true
@@ -39,6 +43,9 @@ train:
   optim: adamw_8bit
   weight_decay: 0.01
   logging_steps: 10
+  # "no" on the 8GB card: an eval pass materialises full logits (vocab 151936) in fp32
+  # and OOMs a GPU that trains fine (ADR 0014). Set to "steps" on a card with >=12GB.
+  eval_strategy: "no"
   eval_steps: 100
   # Validation is 500 rows, but a full pass costs ~12 min of wall clock and runs 6 times
   # -- 75 minutes on a 6.8h run, for a loss estimate that is already stable well before
