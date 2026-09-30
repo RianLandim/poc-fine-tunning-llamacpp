@@ -2,7 +2,7 @@
 # Stage 0 -- vendor and build llama.cpp with CUDA for this machine only.
 #
 # Pinned to a specific commit (ADR 0011): a converter change must never silently alter
-# results between runs. CMAKE_CUDA_ARCHITECTURES=86 targets the RTX 3060 alone, which
+# results between runs. CMAKE_CUDA_ARCHITECTURES=86 targets Ampere alone (RTX 3070 Ti), which
 # cuts build time substantially versus compiling every architecture.
 set -euo pipefail
 

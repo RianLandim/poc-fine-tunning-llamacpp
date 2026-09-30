@@ -6,6 +6,7 @@ UV     ?= uv
 setup:
 	$(UV) sync --extra train --extra eval --extra dev
 	$(UV) run python -c "import torch; assert torch.cuda.is_available(), 'CUDA not visible to torch'; print('torch', torch.__version__, '|', torch.cuda.get_device_name(0))"
+	bash scripts/00_setup_cuda.sh
 	bash scripts/00_setup_llamacpp.sh
 
 data:

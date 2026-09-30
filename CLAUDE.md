@@ -1,8 +1,9 @@
 # poc-fine-tunning-llamacpp
 
 Fine-tune **Qwen3-8B** with **Unsloth QLoRA** on NVIDIA's synthetic Brazilian persona
-corpus, export to **GGUF**, serve and evaluate with **llama.cpp** — all on a single
-RTX 3060 (12GB).
+corpus, export to **GGUF**, serve and evaluate with **llama.cpp** — originally on a single
+RTX 3060 (12GB). **This fork targets an RTX 3070 Ti (8GB)** — see ADR 0013 for what that
+changes.
 
 **Task:** demographic attributes in, six-section Brazilian-Portuguese persona narrative out.
 
@@ -15,10 +16,13 @@ RTX 3060 (12GB).
 
 | | |
 |---|---|
-| GPU | RTX 3060 **12GB**, ~9.5GB free (GNOME holds ~2.7GB) |
-| RAM / disk | 30GB / 304GB free |
-| Driver / CUDA | 595.84 / toolkit 13.3, Ampere `sm_86` |
-| Python | host is **3.14 (unusable for torch)** — always use the project `uv` venv on 3.12 |
+| GPU | RTX 3070 Ti **8GB**, ~7.2GB free (GNOME holds ~0.3-0.4GB) |
+| RAM / disk | 31GB / 259GB free |
+| Driver / CUDA | 580.178.04, Ampere `sm_86`; **no system CUDA toolkit** — `vendor/cuda` (12.8.1) |
+| Python | always use the project `uv` venv on 3.12, never the host Python |
+
+Earlier ADRs, the design spec and `docs/RESULTS.md` were written for and measured on the
+RTX 3060 12GB. They are the historical record; do not rewrite their numbers.
 
 Never `pip install` into the host Python. Use `uv run` / `uv sync`; dependencies are
 pinned in the committed `uv.lock` (ADR 0011).
@@ -32,6 +36,9 @@ make setup → make data → make train → make export → make serve → make 
 `make smoke` runs the whole chain on a 200-row slice in minutes. Run it before any
 multi-hour training run.
 
+**On this card `make train` and the tuned half of `make export` do not run** (see VRAM).
+Everything else does: setup, data, base export, serve, eval, report.
+
 ## Invariants — breaking these silently invalidates results
 
 1. **One prompt renderer.** Every prompt comes from `src/personas/prompt.py`. Never build a
@@ -40,7 +47,7 @@ multi-hour training run.
    Any `<think>` in a generation is a bug and is scored as a format failure.
 3. **Raw `/completion` only.** Never evaluate through `/v1/chat/completions` — llama-server
    re-applies its own Jinja template and breaks train/inference parity (ADR 0006, 0007).
-4. **Base and tuned never run concurrently.** Two Q4_K_M 8B models do not fit in 9.5GB.
+4. **Base and tuned never run concurrently.** Two Q4_K_M 8B models (~10GB) do not fit in 8GB.
    Eval is sequential; the Makefile owns server lifecycle (ADR 0010).
 5. **Base and tuned share a quantisation lineage.** Both go through the same merge →
    convert → quantise steps so the A/B measures the LoRA and nothing else (ADR 0008).
@@ -51,8 +58,13 @@ multi-hour training run.
 
 ## VRAM
 
-Training budget is ~7.7-8.3GB of ~9.5GB free. If it OOMs, in order: batch 1 with
-grad-accum 16 → `max_seq_length` 1536 → stop the GNOME session to reclaim 2.7GB.
+Qwen3-8B QLoRA does **not** train on this card (ADR 0013). The 4-bit checkpoint is 7.0GB
+against ~7.2GB free, so the load fails before the first step, and the measured training
+peak on the 3060 was 9.13GB. The old OOM ladder (batch 1 → `max_seq_length` 1536 → stop
+GNOME) cannot close that gap — do not spend time on it. The tuned merge in
+`03_export_gguf.py` loads the same model and fails the same way.
+
+Serving fits: Q4_K_M 8B with `-ngl 99 -c 4096` peaks at ~5.5GB.
 
 ## Operational gotchas found the hard way
 
@@ -70,6 +82,11 @@ grad-accum 16 → `max_seq_length` 1536 → stop the GNOME session to reclaim 2.
 - **`datasets` streaming aborts the process at interpreter shutdown**, turning a
   successful run into exit 134. `scripts/01_prepare_data.py` exits via `os._exit` after
   flushing.
+- **The llama.cpp build needs `nvcc`, which the torch wheels do not ship.** This host has
+  no system toolkit and no passwordless sudo, so `scripts/00_setup_cuda.sh` installs one
+  into `vendor/cuda` with micromamba, and `00_setup_llamacpp.sh` bakes its lib dir into the
+  rpath. Without that rpath the binaries build fine and then fail at launch with
+  `libcudart.so.12: cannot open shared object file`.
 - **Never pipe a long-running script through `tail`** to inspect it — the pipeline's exit
   code is `tail`'s, so failures report as success. Redirect to a file instead.
 

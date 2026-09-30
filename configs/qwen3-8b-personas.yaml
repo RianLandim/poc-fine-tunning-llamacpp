@@ -58,7 +58,7 @@ decode:
 
 llamacpp:
   # Recorded after the first `make setup`; export LLAMA_COMMIT to pin the build.
-  commit: ""
+  commit: "bdeb855b30dfe7f6e695cba98445a7ba09e6416e"
 
 paths:
   data_dir: data

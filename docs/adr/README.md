@@ -14,6 +14,7 @@
 | [0010](0010-evaluation-strategy.md) | Automatic metrics plus side-by-side | Accepted |
 | [0011](0011-python-env-and-pinning.md) | Isolated uv env on Python 3.12, pinned | Accepted |
 | [0012](0012-revised-training-budget.md) | Revised budget: 10k examples (measured throughput) | Accepted |
+| [0013](0013-target-hardware-rtx-3070-ti.md) | Target hardware: RTX 3070 Ti 8GB | Accepted |
 
 New decisions get the next number. ADRs are immutable once Accepted — a reversal is a new
 ADR that supersedes the old one.

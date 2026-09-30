@@ -4,6 +4,11 @@ Fine-tunes Qwen3-8B with Unsloth QLoRA on `nvidia/Nemotron-Personas-Brazil`, exp
 GGUF, and evaluates against the base model through llama.cpp. Everything runs on a single
 12GB GPU.
 
+> **This fork targets an RTX 3070 Ti 8GB.** Setup, data, base export, serving, eval and
+> report run on it; QLoRA training of Qwen3-8B and the tuned merge do not fit in 8GB. The
+> results below were measured on the original RTX 3060 12GB. See
+> [ADR 0013](docs/adr/0013-target-hardware-rtx-3070-ti.md).
+
 **Task:** demographic attributes in, six-section Brazilian-Portuguese persona out.
 
 | | Base Qwen3-8B | After fine-tuning |
@@ -181,19 +186,22 @@ make report   # outputs/eval/report.html
 
 ## Requirements
 
-RTX 3060 12GB or better · ~9.5GB free VRAM · 30GB RAM · 60GB free disk ·
-NVIDIA driver 535+ · CUDA toolkit and a C++ compiler for the llama.cpp build.
+Training: RTX 3060 12GB or better with ~9.5GB free VRAM. Serving and evaluation: 8GB is
+enough (~5.5GB peak). 30GB RAM · 60GB free disk · NVIDIA driver 535+ · a C++ compiler.
 
 Host Python is not used — `uv` manages a project-local 3.12 environment, and `cmake`
-is installed into it, so no system packages beyond a compiler and CUDA are needed.
+is installed into it. If the host has no CUDA toolkit, `make setup` installs one into
+`vendor/cuda` with micromamba (~2.3GB, no root), so the only system package needed is a
+compiler.
 
 ## Pinning llama.cpp
 
-After the first `make setup`, record the SHA and export it so builds stay reproducible:
+The commit built and verified for this fork is recorded in
+`configs/qwen3-8b-personas.yaml` (`llamacpp.commit`). Export it so builds stay
+reproducible:
 
 ```bash
-git -C vendor/llama.cpp rev-parse HEAD
-export LLAMA_COMMIT=<sha>
+export LLAMA_COMMIT=bdeb855b30dfe7f6e695cba98445a7ba09e6416e
 ```
 
 ## If training runs out of memory
