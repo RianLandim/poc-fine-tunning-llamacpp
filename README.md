@@ -19,7 +19,8 @@ and [ADR 0014](docs/adr/0014-training-qwen3-8b-on-8gb.md).
 
 Measured on 200 held-out rows, identical decoding parameters, same Q4_K_M quantisation.
 The two runs use slightly different training configurations and test splits, so they are
-close rather than identical. Full numbers in [`docs/RESULTS.md`](docs/RESULTS.md).
+close rather than identical. Full numbers in [`docs/RESULTS.md`](docs/RESULTS.md); the
+two cards side by side in [`docs/GPU-COMPARISON.md`](docs/GPU-COMPARISON.md).
 
 ---
 
@@ -221,6 +222,8 @@ desktop session (`sudo systemctl isolate multi-user.target`).
 
 - `docs/superpowers/specs/2026-09-12-persona-finetune-design.md` — the design
 - `docs/superpowers/plans/2026-09-12-persona-finetune.md` — the implementation plan
+- `docs/RESULTS.md` — measured results of both runs
+- `docs/GPU-COMPARISON.md` — RTX 3060 12GB vs RTX 3070 Ti 8GB, side by side
 - `docs/adr/README.md` — why each decision was made
 - `CLAUDE.md` — invariants that must not be broken
 

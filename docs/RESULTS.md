@@ -1,7 +1,8 @@
 # Results — Qwen3-8B QLoRA persona fine-tune
 
 The same pipeline has been run end to end on two GPUs. Run 2 is the current target of this
-fork; run 1 is the original record and its numbers are unchanged.
+fork; run 1 is the original record and its numbers are unchanged. A fuller side-by-side,
+including hardware specs, is in [`GPU-COMPARISON.md`](GPU-COMPARISON.md).
 
 | | Run 2 — RTX 3070 Ti 8GB | Run 1 — RTX 3060 12GB |
 |---|---|---|
